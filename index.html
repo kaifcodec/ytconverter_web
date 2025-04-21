@@ -12,20 +12,22 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            background-color: #f0f0f0;
+            min-height: 100vh;
+            background-color: #f8f9fa;
         }
         .container {
             text-align: center;
             background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
         }
         input {
             padding: 10px;
             font-size: 14px;
-            width: 80%;
+            width: 100%;
             margin-bottom: 20px;
             border: 1px solid #ccc;
             border-radius: 5px;
@@ -38,6 +40,7 @@
             border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
+            width: 100%;
         }
         button:hover {
             background-color: #0056b3;
@@ -46,7 +49,10 @@
             margin-top: 20px;
         }
         .stream-item {
-            margin: 10px 0;
+            margin: 15px 0;
+            padding: 10px;
+            background: #f1f1f1;
+            border-radius: 5px;
         }
         a {
             text-decoration: none;
@@ -55,6 +61,22 @@
         a:hover {
             text-decoration: underline;
         }
+        .video-preview {
+            margin-bottom: 15px;
+        }
+        .video-preview img {
+            max-width: 100%;
+            border-radius: 8px;
+        }
+        .video-title {
+            margin-top: 10px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .loading {
+            font-size: 14px;
+            color: #888;
+        }
     </style>
 </head>
 <body>
@@ -62,50 +84,94 @@
 <div class="container">
     <h1>YouTube Video Stream Downloader</h1>
     <input type="text" id="url" placeholder="Enter YouTube Video URL" />
-    <br>
     <button onclick="getStreamLinks()">Get Stream Links</button>
 
-    <div class="streams" id="streams"></div>
+    <div class="video-preview" id="video-preview">
+        <!-- Video thumbnail and title will be displayed here -->
+    </div>
+
+    <div class="streams" id="streams">
+        <!-- Stream links will be rendered here -->
+    </div>
 </div>
 
 <script>
-    function getStreamLinks() {
+    async function getStreamLinks() {
         const url = document.getElementById('url').value;
+        const streamsContainer = document.getElementById('streams');
+        const videoPreview = document.getElementById('video-preview');
+        streamsContainer.innerHTML = '';
+        videoPreview.innerHTML = '';
+
         if (!url) {
             alert('Please enter a valid YouTube URL');
             return;
         }
 
+        const videoId = extractVideoId(url);
+        if (!videoId) {
+            alert('Invalid YouTube URL. Please try again.');
+            return;
+        }
+
+        // Show loading message
+        streamsContainer.innerHTML = '<p class="loading">Fetching stream links...</p>';
+
+        // Fetch video metadata
+        const videoMetaUrl = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=YOUR_API_KEY`;
+        try {
+            const videoMetaResponse = await fetch(videoMetaUrl);
+            const videoMeta = await videoMetaResponse.json();
+
+            if (videoMeta.items && videoMeta.items.length > 0) {
+                const snippet = videoMeta.items[0].snippet;
+                const thumbnailUrl = snippet.thumbnails.high.url;
+                const title = snippet.title;
+
+                videoPreview.innerHTML = `
+                    <img src="${thumbnailUrl}" alt="Video Thumbnail" />
+                    <div class="video-title">${title}</div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error fetching video metadata: ', error);
+        }
+
+        // Fetch stream links
         const apiUrl = `https://ytdlp-streamlink-production.up.railway.app/?url=${encodeURIComponent(url.split('?')[0])}`;
+        try {
+            const response = await fetch(apiUrl);
+            const data = await response.json();
 
-        fetch(apiUrl)
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    alert(data.error);
-                    return;
-                }
+            if (data.error) {
+                streamsContainer.innerHTML = `<p>${data.error}</p>`;
+                return;
+            }
 
-                const streamsContainer = document.getElementById('streams');
-                streamsContainer.innerHTML = '';  // Clear previous results
+            streamsContainer.innerHTML = '';
+            if (data.streams && data.streams.length > 0) {
+                data.streams.forEach(stream => {
+                    const streamItem = document.createElement('div');
+                    streamItem.classList.add('stream-item');
+                    streamItem.innerHTML = `
+                        <strong>${stream.resolution || 'Audio Only'} (${stream.ext.toUpperCase()})</strong><br>
+                        <a href="${stream.url}" download="${data.title} - ${stream.format_id}.${stream.ext}" target="_blank">Download</a>
+                    `;
+                    streamsContainer.appendChild(streamItem);
+                });
+            } else {
+                streamsContainer.innerHTML = '<p>No streams available.</p>';
+            }
+        } catch (error) {
+            console.error('Error fetching stream links:', error);
+            streamsContainer.innerHTML = '<p>Error fetching stream links.</p>';
+        }
+    }
 
-                if (data.streams && data.streams.length > 0) {
-                    data.streams.forEach(stream => {
-                        const streamItem = document.createElement('div');
-                        streamItem.classList.add('stream-item');
-                        streamItem.innerHTML = `
-                            <strong>${stream.resolution || 'Audio Only'} (${stream.ext.toUpperCase()})</strong><br>
-                            <a href="${stream.url}" download="${data.title} - ${stream.format_id}.${stream.ext}" target="_blank">Download</a>
-                        `;
-                        streamsContainer.appendChild(streamItem);
-                    });
-                } else {
-                    streamsContainer.innerHTML = '<p>No streams available.</p>';
-                }
-            })
-            .catch(error => {
-                alert('Error fetching stream links: ' + error);
-            });
+    function extractVideoId(url) {
+        const regex = /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})|(?:https?:\/\/)?youtu\.be\/([a-zA-Z0-9_-]{11})/;
+        const match = url.match(regex);
+        return match ? match[1] || match[2] : null;
     }
 </script>
 
