@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Stream Downloader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+        .container {
+            text-align: center;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        input {
+            padding: 10px;
+            font-size: 14px;
+            width: 80%;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .streams {
+            margin-top: 20px;
+        }
+        .stream-item {
+            margin: 10px 0;
+        }
+        a {
+            text-decoration: none;
+            color: #007bff;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>YouTube Video Stream Downloader</h1>
+    <input type="text" id="url" placeholder="Enter YouTube Video URL" />
+    <br>
+    <button onclick="getStreamLinks()">Get Stream Links</button>
+
+    <div class="streams" id="streams"></div>
+</div>
+
+<script>
+    function getStreamLinks() {
+        const url = document.getElementById('url').value;
+        if (!url) {
+            alert('Please enter a valid YouTube URL');
+            return;
+        }
+
+        const apiUrl = `https://ytdlp-streamlink-production.up.railway.app/?url=${encodeURIComponent(url)}`;
+
+        fetch(apiUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                const streamsContainer = document.getElementById('streams');
+                streamsContainer.innerHTML = '';  // Clear previous results
+
+                if (data.streams && data.streams.length > 0) {
+                    data.streams.forEach(stream => {
+                        const streamItem = document.createElement('div');
+                        streamItem.classList.add('stream-item');
+                        streamItem.innerHTML = `
+                            <strong>${stream.resolution || 'Audio Only'} (${stream.ext.toUpperCase()})</strong><br>
+                            <a href="${stream.url}" download="${data.title} - ${stream.format_id}.${stream.ext}" target="_blank">Download</a>
+                        `;
+                        streamsContainer.appendChild(streamItem);
+                    });
+                } else {
+                    streamsContainer.innerHTML = '<p>No streams available.</p>';
+                }
+            })
+            .catch(error => {
+                alert('Error fetching stream links: ' + error);
+            });
+    }
+</script>
+
+</body>
+</html>
