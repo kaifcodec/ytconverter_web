@@ -76,7 +76,7 @@
             return;
         }
 
-        const apiUrl = `https://ytdlp-streamlink-production.up.railway.app/?url=${encodeURIComponent(url)}`;
+        const apiUrl = `https://ytdlp-streamlink-production.up.railway.app/?url=${encodeURIComponent(url.split('?')[0])}`;
 
         fetch(apiUrl)
             .then(response => response.json())
